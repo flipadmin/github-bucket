@@ -44,4 +44,6 @@ public interface Config {
     SyncableRepository getPushRepository();
 
     Repository getWorkingFileRepository();
+
+    String getCloudFrontDistribution();
 }

@@ -32,6 +32,7 @@ public final class LambdaConfig implements Config {
     private static final String ENV_BRANCH = "env.branch";
     private static final String ENV_BUCKET = "env.bucket";
     private static final String ENV_GITHUB = "env.github";
+    private static final String ENV_CLOUDFRONTDISTRIBUTION = "env.cloudfrontdistribution";
     private final Properties props = new Properties();
     private final AmazonS3 client = AmazonS3ClientBuilder.defaultClient();
     private final TransportConfigCallback authentication;
@@ -50,6 +51,7 @@ public final class LambdaConfig implements Config {
         overwriteWithSystemProperty(ENV_BRANCH);
         overwriteWithSystemProperty(ENV_BUCKET);
         overwriteWithSystemProperty(ENV_GITHUB);
+        overwriteWithSystemProperty(ENV_CLOUDFRONTDISTRIBUTION);
 
         this.remote = new Remote(Constants.DEFAULT_REMOTE_NAME);
         this.branch = new Branch(props.getProperty(ENV_BRANCH, Constants.MASTER));
@@ -102,6 +104,9 @@ public final class LambdaConfig implements Config {
     public Repository getWorkingFileRepository() {
         return repository;
     }
+
+    @Override
+    public String getCloudFrontDistribution(){ return ENV_CLOUDFRONTDISTRIBUTION; }
 
     private void overwriteWithSystemProperty(String value) {
         String prop = System.getenv(value.replace(".", "_"));
