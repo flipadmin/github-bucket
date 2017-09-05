@@ -1,5 +1,6 @@
 package net.berla.aws;
 
+import net.berla.aws.cloudfront.CloudFrontInvalidator;
 import net.berla.aws.environment.LambdaConfig;
 import net.berla.aws.git.SyncableRepository;
 import org.eclipse.jgit.api.Git;
@@ -55,6 +56,9 @@ class Worker implements Callable<Status> {
             LOG.info("Finished repository synchronization");
             // Close repository and free resources
             config.getWorkingFileRepository().close();
+            
+            // invalidate cloud front edges
+            new CloudFrontInvalidator().call();
         }
     }
 
