@@ -58,7 +58,7 @@ class Worker implements Callable<Status> {
             config.getWorkingFileRepository().close();
             
             // invalidate cloud front edges
-            new CloudFrontInvalidator().call();
+            new CloudFrontInvalidator(config.getCloudFrontDistribution()).call();
         }
     }
 

@@ -106,7 +106,7 @@ public final class LambdaConfig implements Config {
     }
 
     @Override
-    public String getCloudFrontDistribution(){ return ENV_CLOUDFRONTDISTRIBUTION; }
+    public String getCloudFrontDistribution(){ return props.getProperty(ENV_CLOUDFRONTDISTRIBUTION); }
 
     private void overwriteWithSystemProperty(String value) {
         String prop = System.getenv(value.replace(".", "_"));
