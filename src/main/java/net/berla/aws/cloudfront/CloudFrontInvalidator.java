@@ -9,9 +9,13 @@ import com.amazonaws.services.cloudfront.model.InvalidationBatch;
 
 import com.amazonaws.util.StringUtils;
 import net.berla.aws.Status;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 public class CloudFrontInvalidator{
+	private static final Logger LOG = LoggerFactory.getLogger(CloudFrontInvalidator.class);
+
 	private final String distribution;
 	private final AmazonCloudFront client;
 
@@ -26,6 +30,8 @@ public class CloudFrontInvalidator{
 
 
     public Status call() {
+		LOG.info("Uploading file: {}", this.distribution);
+
 		Paths invalidation_paths = new Paths().withItems("*").withQuantity(1);
 		InvalidationBatch invalidation_batch = new InvalidationBatch(
 			invalidation_paths,

@@ -1,10 +1,7 @@
 package net.berla.aws.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.Bucket;
-import com.amazonaws.services.s3.model.ObjectListing;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.amazonaws.services.s3.model.*;
 import com.amazonaws.util.Base64;
 import com.amazonaws.util.IOUtils;
 import com.amazonaws.util.StringUtils;
@@ -145,6 +142,7 @@ public class RepositoryS3 implements SyncableRepository {
             // Fire!
             try (InputStream bis = TikaInputStream.get(content, tikaMetadata)) {
                 bucketMetadata.setContentType(TIKA_DETECTOR.detect(bis, tikaMetadata).toString());
+                bucketMetadata.setHeader("acl", CannedAccessControlList.PublicRead);
                 s3.putObject(bucket.getName(), path, bis, bucketMetadata);
                 return true;
             }
