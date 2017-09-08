@@ -142,8 +142,9 @@ public class RepositoryS3 implements SyncableRepository {
             // Fire!
             try (InputStream bis = TikaInputStream.get(content, tikaMetadata)) {
                 bucketMetadata.setContentType(TIKA_DETECTOR.detect(bis, tikaMetadata).toString());
-                bucketMetadata.setHeader("acl", CannedAccessControlList.PublicRead);
-                s3.putObject(bucket.getName(), path, bis, bucketMetadata);
+                PutObjectRequest req = new PutObjectRequest(bucket.getName(), path, bis, bucketMetadata);
+                req.setCannedAcl(CannedAccessControlList.PublicRead);
+                s3.putObject(req);
                 return true;
             }
         }
