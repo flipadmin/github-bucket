@@ -93,9 +93,11 @@ public class RepositoryS3 implements SyncableRepository {
 
         // Delete remaining objects, as they are not in the repo anymore
         for (S3ObjectSummary file : files) {
-            LOG.info("Deleting file: {}", file.getKey());
-            s3.deleteObject(file.getBucketName(), file.getKey());
+            LOG.info("Deleting file");
+            LOG.info(file.toString());
+//            s3.deleteObject(file.getBucketName(), file.getKey());
         }
+
         return Status.SUCCESS;
     }
 
@@ -148,6 +150,7 @@ public class RepositoryS3 implements SyncableRepository {
                 return true;
             }
         }
+
         LOG.info("Skipping file (same checksum): {}", path);
         return false;
     }
