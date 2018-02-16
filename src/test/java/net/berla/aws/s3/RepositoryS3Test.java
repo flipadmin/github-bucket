@@ -30,141 +30,147 @@ import static org.mockito.Mockito.*;
 @RunWith(MockitoJUnitRunner.class)
 public class RepositoryS3Test {
 
-    private static final Bucket BUCKET = new Bucket("TestBucket");
+  private static final Bucket BUCKET = new Bucket("TestBucket");
 
-    private final AmazonS3 amazonS3 = mock(AmazonS3.class);
+  private final AmazonS3 amazonS3 = mock(AmazonS3.class);
 
-    private final TestRepository<InMemoryRepository> repository;
+  private final TestRepository<InMemoryRepository> repository;
 
-    private final RepositoryS3 uut;
+  private final RepositoryS3 uut;
 
-    @Rule
-    public ExpectedException exception = ExpectedException.none();
+  @Rule
+  public ExpectedException exception = ExpectedException.none();
 
-    public RepositoryS3Test() {
-        try {
-            this.repository = new TestRepository<>(new InMemoryRepository(new DfsRepositoryDescription()));
-            this.uut = new RepositoryS3(BUCKET, repository.getRepository(), amazonS3, new Branch(Constants.MASTER));
-        }
-        catch (Exception e) {
-            throw new IllegalArgumentException(e);
-        }
+  public RepositoryS3Test() {
+    try {
+      this.repository = new TestRepository<>(new InMemoryRepository(new DfsRepositoryDescription()));
+      this.uut = new RepositoryS3(BUCKET, repository.getRepository(), amazonS3, new Branch(Constants.MASTER));
+    } catch (Exception e) {
+      throw new IllegalArgumentException(e);
     }
+  }
 
-    @Test
-    public void shouldSync() throws Exception {
-        // Given
-        String pathReadmeMd = "README.md";
-        String contentReadmeMd = "This is a test file";
-        this.repository.branch(Constants.MASTER).commit().add(pathReadmeMd, this.repository.blob(contentReadmeMd)).create();
+  @Test
+  public void shouldSync() throws Exception {
+    // Given
+    String pathReadmeMd = "README.md";
+    String contentReadmeMd = "This is a test file";
 
-        ObjectListing result = mock(ObjectListing.class);
-        when(result.isTruncated()).thenReturn(false);
-        when(result.getObjectSummaries()).thenReturn(new ArrayList<S3ObjectSummary>(2) {{
-            S3ObjectSummary summary;
+    String pathNextFile = "SSS";
+    String contentNextFile = "SSS";
 
-            summary = new S3ObjectSummary();
-            summary.setBucketName(BUCKET.getName());
-            summary.setKey(".git/test");
-            summary.setETag("123");
-            add(summary);
+    this.repository.branch(Constants.MASTER).commit()
+        .add(pathReadmeMd, this.repository.blob(contentReadmeMd))
+        .add(pathNextFile, this.repository.blob(contentNextFile)).create();
 
-            summary = new S3ObjectSummary();
-            summary.setBucketName(BUCKET.getName());
-            summary.setKey(pathReadmeMd);
-            summary.setETag("123");
-            add(summary);
-        }});
-        when(amazonS3.listObjects(BUCKET.getName())).thenReturn(result);
-        when(amazonS3.putObject(eq(BUCKET.getName()), any(), any(), any())).thenReturn(null);
-        doNothing().when(amazonS3).deleteObject(eq(BUCKET.getName()), any());
 
-        // When
-        Status status = uut.call();
+    ObjectListing result = mock(ObjectListing.class);
+    when(result.isTruncated()).thenReturn(false);
+    when(result.getObjectSummaries()).thenReturn(new ArrayList<S3ObjectSummary>(2) {{
+      S3ObjectSummary summary;
 
-        // Then
-        assertThat(status, is(SUCCESS));
-        verify(amazonS3, times(1)).listObjects(eq(BUCKET.getName()));
-        verify(amazonS3, times(1)).putObject(eq(BUCKET.getName()), eq(pathReadmeMd), any(), any());
-        verify(amazonS3, times(0)).deleteObject(eq(BUCKET.getName()), any());
-        verifyNoMoreInteractions(amazonS3);
-    }
+      summary = new S3ObjectSummary();
+      summary.setBucketName(BUCKET.getName());
+      summary.setKey(".git/test");
+      summary.setETag("123");
+      add(summary);
 
-    @Test
-    public void shouldCompareHashes() throws Exception {
-        // Given
-        String pathReadmeMd = "README.md";
-        String contentReadmeMd = "This is a test file";
-        this.repository.branch(Constants.MASTER).commit().add(pathReadmeMd, this.repository.blob(contentReadmeMd)).create();
+      summary = new S3ObjectSummary();
+      summary.setBucketName(BUCKET.getName());
+      summary.setKey(pathNextFile);
+      summary.setETag(DigestUtils.md5Hex(contentNextFile.getBytes(StringUtils.UTF8)));
+      add(summary);
+    }});
+    when(amazonS3.listObjects(BUCKET.getName())).thenReturn(result);
+    when(amazonS3.putObject(eq(BUCKET.getName()), any(), any(), any())).thenReturn(null);
+    doNothing().when(amazonS3).deleteObject(eq(BUCKET.getName()), any());
 
-        ObjectListing result = mock(ObjectListing.class);
-        when(result.isTruncated()).thenReturn(false);
-        when(result.getObjectSummaries()).thenReturn(new ArrayList<S3ObjectSummary>(2) {{
-            S3ObjectSummary summary;
+    // When
+    Status status = uut.call();
 
-            summary = new S3ObjectSummary();
-            summary.setBucketName(BUCKET.getName());
-            summary.setKey(".git/test");
-            summary.setETag("123");
-            add(summary);
+    // Then
+    assertThat(status, is(SUCCESS));
+    verify(amazonS3, times(1)).listObjects(eq(BUCKET.getName()));
+    verify(amazonS3, times(1)).putObject(eq(BUCKET.getName()), eq(pathReadmeMd), any(), any());
+    verify(amazonS3, times(0)).deleteObject(eq(BUCKET.getName()), any());
+    verifyNoMoreInteractions(amazonS3);
+  }
 
-            summary = new S3ObjectSummary();
-            summary.setBucketName(BUCKET.getName());
-            summary.setKey(pathReadmeMd);
-            summary.setETag(DigestUtils.md5Hex(contentReadmeMd.getBytes(StringUtils.UTF8)));
-            add(summary);
-        }});
-        when(amazonS3.listObjects(BUCKET.getName())).thenReturn(result);
-        when(amazonS3.putObject(eq(BUCKET.getName()), any(), any(), any())).thenReturn(null);
-        doNothing().when(amazonS3).deleteObject(eq(BUCKET.getName()), any());
+  @Test
+  public void shouldCompareHashes() throws Exception {
+    // Given
+    String pathReadmeMd = "README.md";
+    String contentReadmeMd = "This is a test file";
+    this.repository.branch(Constants.MASTER).commit().add(pathReadmeMd, this.repository.blob(contentReadmeMd)).create();
 
-        // When
-        Status status = uut.call();
+    ObjectListing result = mock(ObjectListing.class);
+    when(result.isTruncated()).thenReturn(false);
+    when(result.getObjectSummaries()).thenReturn(new ArrayList<S3ObjectSummary>(2) {{
+      S3ObjectSummary summary;
 
-        // Then
-        assertThat(status, is(SUCCESS));
-        verify(amazonS3, times(1)).listObjects(eq(BUCKET.getName()));
-        verify(amazonS3, times(0)).putObject(eq(BUCKET.getName()), eq(pathReadmeMd), any(), any());
-        verify(amazonS3, times(0)).deleteObject(eq(BUCKET.getName()), any());
-        verifyNoMoreInteractions(amazonS3);
-    }
+      summary = new S3ObjectSummary();
+      summary.setBucketName(BUCKET.getName());
+      summary.setKey(".git/test");
+      summary.setETag("123");
+      add(summary);
 
-    @Test
-    public void shouldDeleteOldFile() throws Exception {
-        // Given
-        String pathReadmeMd = "README.md";
-        String contentReadmeMd = "This is a test file";
-        this.repository.branch(Constants.MASTER).commit().create();
+      summary = new S3ObjectSummary();
+      summary.setBucketName(BUCKET.getName());
+      summary.setKey(pathReadmeMd);
+      summary.setETag(DigestUtils.md5Hex(contentReadmeMd.getBytes(StringUtils.UTF8)));
+      add(summary);
+    }});
+    when(amazonS3.listObjects(BUCKET.getName())).thenReturn(result);
+    when(amazonS3.putObject(eq(BUCKET.getName()), any(), any(), any())).thenReturn(null);
+    doNothing().when(amazonS3).deleteObject(eq(BUCKET.getName()), any());
 
-        ObjectListing result = mock(ObjectListing.class);
-        when(result.isTruncated()).thenReturn(false);
-        when(result.getObjectSummaries()).thenReturn(new ArrayList<S3ObjectSummary>(2) {{
-            S3ObjectSummary summary;
+    // When
+    Status status = uut.call();
 
-            summary = new S3ObjectSummary();
-            summary.setBucketName(BUCKET.getName());
-            summary.setKey(".git/test");
-            summary.setETag("123");
-            add(summary);
+    // Then
+    assertThat(status, is(SUCCESS));
+    verify(amazonS3, times(1)).listObjects(eq(BUCKET.getName()));
+    verify(amazonS3, times(0)).putObject(eq(BUCKET.getName()), eq(pathReadmeMd), any(), any());
+    verify(amazonS3, times(0)).deleteObject(eq(BUCKET.getName()), any());
+    verifyNoMoreInteractions(amazonS3);
+  }
 
-            summary = new S3ObjectSummary();
-            summary.setBucketName(BUCKET.getName());
-            summary.setKey(pathReadmeMd);
-            summary.setETag(DigestUtils.md5Hex(contentReadmeMd.getBytes(StringUtils.UTF8)));
-            add(summary);
-        }});
-        when(amazonS3.listObjects(BUCKET.getName())).thenReturn(result);
-        when(amazonS3.putObject(eq(BUCKET.getName()), any(), any(), any())).thenReturn(null);
-        doNothing().when(amazonS3).deleteObject(eq(BUCKET.getName()), any());
+  @Test
+  public void shouldDeleteOldFile() throws Exception {
+    // Given
+    String pathReadmeMd = "README.md";
+    String contentReadmeMd = "This is a test file";
+    this.repository.branch(Constants.MASTER).commit().create();
 
-        // When
-        Status status = uut.call();
+    ObjectListing result = mock(ObjectListing.class);
+    when(result.isTruncated()).thenReturn(false);
+    when(result.getObjectSummaries()).thenReturn(new ArrayList<S3ObjectSummary>(2) {{
+      S3ObjectSummary summary;
 
-        // Then
-        assertThat(status, is(SUCCESS));
-        verify(amazonS3, times(1)).listObjects(eq(BUCKET.getName()));
-        verify(amazonS3, times(0)).putObject(eq(BUCKET.getName()), eq(pathReadmeMd), any(), any());
-        verify(amazonS3, times(1)).deleteObject(eq(BUCKET.getName()), eq(pathReadmeMd));
-        verifyNoMoreInteractions(amazonS3);
-    }
+      summary = new S3ObjectSummary();
+      summary.setBucketName(BUCKET.getName());
+      summary.setKey(".git/test");
+      summary.setETag("123");
+      add(summary);
+
+      summary = new S3ObjectSummary();
+      summary.setBucketName(BUCKET.getName());
+      summary.setKey(pathReadmeMd);
+      summary.setETag(DigestUtils.md5Hex(contentReadmeMd.getBytes(StringUtils.UTF8)));
+      add(summary);
+    }});
+    when(amazonS3.listObjects(BUCKET.getName())).thenReturn(result);
+    when(amazonS3.putObject(eq(BUCKET.getName()), any(), any(), any())).thenReturn(null);
+    doNothing().when(amazonS3).deleteObject(eq(BUCKET.getName()), any());
+
+    // When
+    Status status = uut.call();
+
+    // Then
+    assertThat(status, is(SUCCESS));
+    verify(amazonS3, times(1)).listObjects(eq(BUCKET.getName()));
+    verify(amazonS3, times(0)).putObject(eq(BUCKET.getName()), eq(pathReadmeMd), any(), any());
+    verify(amazonS3, times(1)).deleteObject(eq(BUCKET.getName()), eq(pathReadmeMd));
+    verifyNoMoreInteractions(amazonS3);
+  }
 }
