@@ -33,8 +33,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.DigestInputStream;
-import java.util.Iterator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -70,7 +71,7 @@ public class RepositoryS3 implements SyncableRepository {
     public Status call() throws Exception {
         // Get S3 file list
         final List<S3ObjectSummary> files = getS3ObjectSummaries();
-        final Iterator<S3ObjectSummary> iter = files.iterator();
+        Map<String, S3ObjectSummary> diffMap = prepareDiffMap(files);
 
         try (final TreeWalk walker = new TreeWalk(repository)) {
             walker.addTree(getRevTree());
@@ -88,21 +89,29 @@ public class RepositoryS3 implements SyncableRepository {
                     continue;
                 }
                 // Here we have a real file!
-                if (walk(iter, walker.getObjectId(0), walker.getPathString())) {
+                if (walk(diffMap, walker.getObjectId(0), walker.getPathString())) {
                     LOG.info("Uploaded file: {}", walker.getPathString());
                 }
             }
         }
 
         // Delete remaining objects, as they are not in the repo anymore
-        for (S3ObjectSummary file : files) {
-            LOG.info("Deleting file: {}", file.getKey());
-            s3.deleteObject(file.getBucketName(), file.getKey());
+        for (String file : diffMap.keySet()) {
+            LOG.info("Deleting file: {}", file);
+            s3.deleteObject(bucket.getName(), file);
         }
         return Status.SUCCESS;
     }
 
-    private List<S3ObjectSummary> getS3ObjectSummaries() {
+  private Map<String,S3ObjectSummary> prepareDiffMap(List<S3ObjectSummary> files) {
+    HashMap<String, S3ObjectSummary> result = new HashMap<>();
+    for (S3ObjectSummary file : files) {
+      result.put(file.getKey(), file);
+    }
+    return result;
+  }
+
+  private List<S3ObjectSummary> getS3ObjectSummaries() {
         // Do not include .git repository
         // matches: .git, .git/test...
         final Pattern excludePattern = Pattern.compile(String.format("^(\\.ssh|%s)(\\/.+)*$", Pattern.quote(Constants.DOT_GIT)));
@@ -124,7 +133,7 @@ public class RepositoryS3 implements SyncableRepository {
         return commit.getTree();
     }
 
-    private boolean walk(Iterator<S3ObjectSummary> iter, ObjectId file, String path) throws IOException {
+    private boolean walk(Map<String, S3ObjectSummary> diffMap, ObjectId file, String path) throws IOException {
         byte[] content;
         byte[] newHash;
         LOG.debug("Start processing file: {}", path);
@@ -134,7 +143,7 @@ public class RepositoryS3 implements SyncableRepository {
             // Get hash
             newHash = is.getMessageDigest().digest();
         }
-        if (isUploadFile(iter, path, Hex.encodeHexString(newHash))) {
+        if (isUploadFile(diffMap, path, Hex.encodeHexString(newHash))) {
             LOG.info("Uploading file: {}", path);
             ObjectMetadata bucketMetadata = new ObjectMetadata();
             bucketMetadata.setContentMD5(Base64.encodeAsString(newHash));
@@ -153,21 +162,15 @@ public class RepositoryS3 implements SyncableRepository {
         return false;
     }
 
-    private boolean isUploadFile(Iterator<S3ObjectSummary> iter, String path, String hash) {
-        while (iter.hasNext()) {
-            S3ObjectSummary fileS3 = iter.next();
-            // Filename should look like this:
-            // a/b
-            if (!fileS3.getKey().equals(path)) {
-                // If this is another file, then continue!
-                continue;
-            }
-            // Remove the file from the S3 list as it does not need to be processed further
-            iter.remove();
-            // Upload if the hashes differ
-            return StringUtils.isNullOrEmpty(hash) || !fileS3.getETag().equals(hash);
-        }
+    private boolean isUploadFile(Map<String, S3ObjectSummary> diffMap, String path, String hash) {
+      S3ObjectSummary existingFile = diffMap.remove(path);
+
+      if (existingFile == null) {
         return true;
+      }
+
+      // Upload if the hashes differ
+      return StringUtils.isNullOrEmpty(hash) || !existingFile.getETag().equals(hash);
     }
 
     @Override
