@@ -5,6 +5,7 @@ import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.util.StringUtils;
 import net.berla.aws.Config;
+import net.berla.aws.cloudfront.CloudFrontInvalidator;
 import net.berla.aws.git.Branch;
 import net.berla.aws.git.Remote;
 import net.berla.aws.git.SecureShellAuthentication;
@@ -32,6 +33,7 @@ public final class LambdaConfig implements Config {
     private static final String ENV_BRANCH = "env.branch";
     private static final String ENV_BUCKET = "env.bucket";
     private static final String ENV_GITHUB = "env.github";
+    private static final String ENV_CLOUDFRONT_DISTRIBUTION = "env.cloudfrontdistribution";
     private final Properties props = new Properties();
     private final AmazonS3 client = AmazonS3ClientBuilder.defaultClient();
     private final TransportConfigCallback authentication;
@@ -50,6 +52,7 @@ public final class LambdaConfig implements Config {
         overwriteWithSystemProperty(ENV_BRANCH);
         overwriteWithSystemProperty(ENV_BUCKET);
         overwriteWithSystemProperty(ENV_GITHUB);
+        overwriteWithSystemProperty(ENV_CLOUDFRONT_DISTRIBUTION);
 
         this.remote = new Remote(Constants.DEFAULT_REMOTE_NAME);
         this.branch = new Branch(props.getProperty(ENV_BRANCH, Constants.MASTER));
@@ -95,7 +98,7 @@ public final class LambdaConfig implements Config {
 
     @Override
     public SyncableRepository getPushRepository() {
-        return new RepositoryS3(new Bucket(props.getProperty(ENV_BUCKET)), repository, client, branch);
+        return new RepositoryS3(new Bucket(props.getProperty(ENV_BUCKET)), client, new CloudFrontInvalidator(props.getProperty(ENV_CLOUDFRONT_DISTRIBUTION)), repository,  branch);
     }
 
     @Override

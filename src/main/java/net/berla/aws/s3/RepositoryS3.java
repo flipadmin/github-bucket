@@ -1,14 +1,12 @@
 package net.berla.aws.s3;
 
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.Bucket;
-import com.amazonaws.services.s3.model.ObjectListing;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.amazonaws.services.s3.model.*;
 import com.amazonaws.util.Base64;
 import com.amazonaws.util.IOUtils;
 import com.amazonaws.util.StringUtils;
 import net.berla.aws.Status;
+import net.berla.aws.cloudfront.CloudFrontInvalidator;
 import net.berla.aws.git.Branch;
 import net.berla.aws.git.SyncableRepository;
 import org.apache.commons.codec.binary.Hex;
@@ -58,13 +56,15 @@ public class RepositoryS3 implements SyncableRepository {
     private final Repository repository;
     private final URIish uri;
     private final Branch branch;
+    private final CloudFrontInvalidator cloudFrontInvalidator;
 
-    public RepositoryS3(Bucket bucket, Repository repository, AmazonS3 s3, Branch branch) {
+    public RepositoryS3(Bucket bucket, AmazonS3 s3, CloudFrontInvalidator cloudFrontInvalidator, Repository repository, Branch branch) {
         this.s3 = s3;
         this.bucket = bucket;
         this.repository = repository;
         this.branch = branch;
         this.uri = new URIish().setScheme("amazon-s3").setHost(bucket.getName()).setPath(Constants.DOT_GIT);
+        this.cloudFrontInvalidator = cloudFrontInvalidator;
     }
 
     @Override
@@ -100,6 +100,10 @@ public class RepositoryS3 implements SyncableRepository {
             LOG.info("Deleting file: {}", file);
             s3.deleteObject(bucket.getName(), file);
         }
+
+        // invalidate cloud front edges
+        cloudFrontInvalidator.call();
+
         return Status.SUCCESS;
     }
 
@@ -154,10 +158,13 @@ public class RepositoryS3 implements SyncableRepository {
             // Fire!
             try (InputStream bis = TikaInputStream.get(content, tikaMetadata)) {
                 bucketMetadata.setContentType(TIKA_DETECTOR.detect(bis, tikaMetadata).toString());
-                s3.putObject(bucket.getName(), path, bis, bucketMetadata);
+                PutObjectRequest req = new PutObjectRequest(bucket.getName(), path, bis, bucketMetadata);
+                req.setCannedAcl(CannedAccessControlList.PublicRead);
+                s3.putObject(req);
                 return true;
             }
         }
+
         LOG.info("Skipping file (same checksum): {}", path);
         return false;
     }
