@@ -3,15 +3,19 @@ package net.berla.aws.s3;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.ObjectListing;
+import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.util.StringUtils;
 import net.berla.aws.Status;
+import net.berla.aws.cloudfront.CloudFrontInvalidator;
 import net.berla.aws.git.Branch;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.eclipse.jgit.internal.storage.dfs.DfsRepositoryDescription;
 import org.eclipse.jgit.internal.storage.dfs.InMemoryRepository;
 import org.eclipse.jgit.junit.TestRepository;
 import org.eclipse.jgit.lib.Constants;
+import org.hamcrest.Description;
+import org.hamcrest.TypeSafeDiagnosingMatcher;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -22,8 +26,10 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 import static net.berla.aws.Status.SUCCESS;
+import static net.berla.aws.s3.RepositoryS3Test.PutRequestMatcher.putRequest;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.Matchers.any;
@@ -37,6 +43,8 @@ public class RepositoryS3Test {
 
   private final AmazonS3 amazonS3 = mock(AmazonS3.class);
 
+  private final CloudFrontInvalidator cloudFrontInvalidator = mock(CloudFrontInvalidator.class);
+
   private final TestRepository<InMemoryRepository> repository;
 
   private final RepositoryS3 objectUnderTest;
@@ -46,7 +54,7 @@ public class RepositoryS3Test {
 
   public RepositoryS3Test() throws IOException {
     repository = new TestRepository<>(new InMemoryRepository(new DfsRepositoryDescription()));
-    objectUnderTest = new RepositoryS3(BUCKET, repository.getRepository(), amazonS3, new Branch(Constants.MASTER));
+    objectUnderTest = new RepositoryS3(BUCKET, amazonS3, cloudFrontInvalidator, repository.getRepository(), new Branch(Constants.MASTER));
   }
 
   @Test
@@ -88,8 +96,8 @@ public class RepositoryS3Test {
     // Then
     assertThat(status, is(SUCCESS));
     verify(amazonS3, times(1)).listObjects(eq(BUCKET.getName()));
-    verify(amazonS3, times(1)).putObject(eq(BUCKET.getName()), eq(pathFileB), any(), any());
-    verify(amazonS3, times(1)).putObject(eq(BUCKET.getName()), eq(pathFileD), any(), any());
+    verify(amazonS3, times(1)).putObject(argThat(putRequest(BUCKET.getName(), pathFileB)));
+    verify(amazonS3, times(1)).putObject(argThat(putRequest(BUCKET.getName(), pathFileD)));
     verify(amazonS3, times(1)).deleteObject(eq(BUCKET.getName()), eq(pathFileA));
     verifyNoMoreInteractions(amazonS3);
   }
@@ -110,7 +118,7 @@ public class RepositoryS3Test {
     // Then
     assertThat(status, is(SUCCESS));
     verify(amazonS3, times(1)).listObjects(eq(BUCKET.getName()));
-    verify(amazonS3, times(1)).putObject(eq(BUCKET.getName()), eq(pathReadmeMd), any(), any());
+    verify(amazonS3, times(1)).putObject(argThat(putRequest(BUCKET.getName(), pathReadmeMd)));
     verify(amazonS3, times(0)).deleteObject(eq(BUCKET.getName()), any());
     verifyNoMoreInteractions(amazonS3);
   }
@@ -142,4 +150,42 @@ public class RepositoryS3Test {
     return "This is a content of " + fileName;
   }
 
+
+  public static class PutRequestMatcher extends TypeSafeDiagnosingMatcher<PutObjectRequest> {
+    private final String bucketName;
+    private final String key;
+
+    private PutRequestMatcher(String bucketName, String key) {
+      this.bucketName = bucketName;
+      this.key = key;
+    }
+
+    @Override
+    protected boolean matchesSafely(PutObjectRequest putObjectRequest, Description mismatchDescription) {
+      if (!Objects.equals(putObjectRequest.getBucketName(), bucketName)) {
+        mismatchDescription.appendText("a request with bucket: ")
+            .appendValue(putObjectRequest.getBucketName());
+        return false;
+      }
+
+      if (!Objects.equals(putObjectRequest.getKey(), key)) {
+        mismatchDescription.appendText("a request with key: ")
+            .appendValue(putObjectRequest.getKey());
+        return false;
+      }
+      return true;
+    }
+
+    @Override
+    public void describeTo(Description description) {
+      description.appendText("a request with bucket: ")
+          .appendValue(bucketName)
+          .appendText(" and key ")
+          .appendValue(key);
+    }
+
+    public static PutRequestMatcher putRequest(String bucketName, String key) {
+      return new PutRequestMatcher(bucketName, key);
+    }
+  }
 }
