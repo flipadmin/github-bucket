@@ -5,7 +5,7 @@
 
     <groupId>net.berla.aws</groupId>
     <artifactId>github-bucket</artifactId>
-    <version>1.1</version>
+    <version>1.1.2</version>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <slf4j.version>1.7.2</slf4j.version>
@@ -126,6 +126,14 @@
     </dependencies>
 
     <build>
+        <extensions>
+            <extension>
+                <groupId>org.kuali.maven.wagons</groupId>
+                <artifactId>maven-s3-wagon</artifactId>
+                <version>1.2.1</version>
+            </extension>
+        </extensions>
+
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -190,4 +198,17 @@
             </plugin>
         </plugins>
     </build>
+
+    <distributionManagement>
+        <repository>
+            <id>argyll-s3-release-repo</id>
+            <name>AWS Release Repository</name>
+            <url>s3://s3-repository-argyll-tech/releases</url>
+        </repository>
+        <snapshotRepository>
+            <id>argyll-s3-snapshot-repo</id>
+            <name>AWS Snapshot Repository</name>
+            <url>s3://s3-repository-argyll-tech/snapshots</url>
+        </snapshotRepository>
+    </distributionManagement>
 </project>
